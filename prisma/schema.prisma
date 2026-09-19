@@ -4,169 +4,228 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")
+  url      = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
 
-enum UserStatus { ACTIVE SUSPENDED BLOCKED PENDING }
-enum WalletStatus { ACTIVE FROZEN CLOSED }
-enum FinancialTransactionType { DEPOSIT BET WIN ROLLBACK WITHDRAWAL ADJUSTMENT REFUND }
-enum TransactionStatus { PENDING SUCCESS FAILED REVERSED }
-enum ProviderTransactionType { BALANCE DEBIT CREDIT ROLLBACK }
-enum GameCategory { CRASH INSTANT SLOTS TABLE CARD LIVE_CASINO OTHER }
-enum GameStatus { ACTIVE INACTIVE MAINTENANCE }
-enum GameSessionStatus { ACTIVE ENDED EXPIRED CANCELLED }
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+  PENDING
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum FinancialTransactionType {
+  DEPOSIT
+  BET
+  WIN
+  ROLLBACK
+  WITHDRAWAL
+  ADJUSTMENT
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REVERSED
+}
+
+enum ProviderTransactionType {
+  BALANCE
+  DEBIT
+  CREDIT
+  ROLLBACK
+}
+
+enum GameCategory {
+  CRASH
+  INSTANT
+  SLOTS
+  TABLE
+  CARD
+  LIVE_CASINO
+  OTHER
+}
+
+enum GameStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+}
+
+enum GameSessionStatus {
+  ACTIVE
+  ENDED
+  EXPIRED
+  CANCELLED
+}
 
 model User {
-  id String @id @default(uuid())
-  phone String? @unique
-  email String? @unique
-  status UserStatus @default(PENDING)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  wallets Wallet[]
+  id                    String                 @id @default(uuid())
+  phone                 String?                @unique
+  email                 String?                @unique
+  status                UserStatus             @default(PENDING)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  wallets               Wallet[]
   financialTransactions FinancialTransaction[]
-  providerTransactions ProviderTransaction[]
-  otpChallenges OtpChallenge[]
-  gameSessions GameSession[]
+  providerTransactions  ProviderTransaction[]
+  otpChallenges         OtpChallenge[]
+  gameSessions          GameSession[]
+
   @@map("users")
 }
 
 model Wallet {
-  id String @id @default(uuid())
-  userId String
-  currency String @default("INR")
-  balance Decimal @default(0) @db.Decimal(20,2)
-  status WalletStatus @default(ACTIVE)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user User @relation(fields:[userId],references:[id],onDelete:Restrict)
-  ledgerEntries LedgerEntry[]
+  id                    String                 @id @default(uuid())
+  userId                String
+  currency              String                 @default("INR")
+  balance               Decimal                @default(0) @db.Decimal(20, 2)
+  status                WalletStatus           @default(ACTIVE)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ledgerEntries         LedgerEntry[]
   financialTransactions FinancialTransaction[]
-  providerTransactions ProviderTransaction[]
-  @@unique([userId,currency])
+  providerTransactions  ProviderTransaction[]
+
+  @@unique([userId, currency])
   @@index([userId])
   @@map("wallets")
 }
 
 model FinancialTransaction {
-  id String @id @default(uuid())
-  walletId String
-  userId String
-  type FinancialTransactionType
-  amount Decimal @db.Decimal(20,2)
-  currency String
-  status TransactionStatus @default(SUCCESS)
-  reference String?
-  metadata Json?
-  createdAt DateTime @default(now())
-  processedAt DateTime?
-  user User @relation(fields:[userId],references:[id],onDelete:Restrict)
-  wallet Wallet @relation(fields:[walletId],references:[id],onDelete:Restrict)
-  ledgerEntries LedgerEntry[]
+  id                   String                    @id @default(uuid())
+  walletId             String
+  userId               String
+  type                 FinancialTransactionType
+  amount               Decimal                   @db.Decimal(20, 2)
+  currency             String
+  status               TransactionStatus        @default(SUCCESS)
+  reference            String?
+  metadata             Json?
+  createdAt            DateTime                  @default(now())
+  processedAt          DateTime?
+  user                 User                      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet               Wallet                    @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  ledgerEntries        LedgerEntry[]
   providerTransactions ProviderTransaction[]
-  @@index([userId,createdAt])
-  @@index([walletId,createdAt])
+
+  @@index([userId, createdAt])
+  @@index([walletId, createdAt])
   @@index([reference])
   @@map("financial_transactions")
 }
 
 model LedgerEntry {
-  id String @id @default(uuid())
-  walletId String
-  transactionId String
-  type FinancialTransactionType
-  amount Decimal @db.Decimal(20,2)
-  balanceBefore Decimal @db.Decimal(20,2)
-  balanceAfter Decimal @db.Decimal(20,2)
-  currency String
-  reference String?
-  metadata Json?
-  createdAt DateTime @default(now())
-  wallet Wallet @relation(fields:[walletId],references:[id],onDelete:Restrict)
-  transaction FinancialTransaction @relation(fields:[transactionId],references:[id],onDelete:Restrict)
-  @@index([walletId,createdAt])
+  id               String                    @id @default(uuid())
+  walletId         String
+  transactionId    String
+  type             FinancialTransactionType
+  amount           Decimal                   @db.Decimal(20, 2)
+  balanceBefore    Decimal                   @db.Decimal(20, 2)
+  balanceAfter     Decimal                   @db.Decimal(20, 2)
+  currency         String
+  reference        String?
+  metadata         Json?
+  createdAt        DateTime                  @default(now())
+  wallet           Wallet                    @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  transaction      FinancialTransaction      @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+
+  @@index([walletId, createdAt])
   @@index([transactionId])
   @@map("ledger_entries")
 }
 
 model ProviderTransaction {
-  id String @id @default(uuid())
-  provider String
-  providerTransactionId String
-  providerRoundId String?
+  id                          String                   @id @default(uuid())
+  provider                    String
+  providerTransactionId       String
+  providerRoundId             String?
   originalProviderTransactionId String?
-  userId String
-  walletId String
-  financialTransactionId String?
-  type ProviderTransactionType
-  amount Decimal? @db.Decimal(20,2)
-  currency String
-  status TransactionStatus @default(SUCCESS)
-  requestPayload Json?
-  responsePayload Json?
-  createdAt DateTime @default(now())
-  processedAt DateTime?
-  user User @relation(fields:[userId],references:[id],onDelete:Restrict)
-  wallet Wallet @relation(fields:[walletId],references:[id],onDelete:Restrict)
-  financialTransaction FinancialTransaction? @relation(fields:[financialTransactionId],references:[id],onDelete:Restrict)
-  @@unique([provider,providerTransactionId])
-  @@index([userId,createdAt])
-  @@index([provider,providerRoundId])
-  @@index([provider,originalProviderTransactionId])
+  userId                      String
+  walletId                    String
+  financialTransactionId      String?
+  type                        ProviderTransactionType
+  amount                      Decimal?                 @db.Decimal(20, 2)
+  currency                    String
+  status                      TransactionStatus       @default(SUCCESS)
+  requestPayload              Json?
+  responsePayload             Json?
+  createdAt                   DateTime                 @default(now())
+  processedAt                 DateTime?
+  user                        User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  wallet                      Wallet                   @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  financialTransaction       FinancialTransaction?    @relation(fields: [financialTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerTransactionId])
+  @@index([userId, createdAt])
+  @@index([provider, providerRoundId])
+  @@index([provider, originalProviderTransactionId])
   @@map("provider_transactions")
 }
 
 model OtpChallenge {
-  id String @id @default(uuid())
-  userId String?
+  id         String    @id @default(uuid())
+  userId     String?
   identifier String
-  channel String
-  codeHash String
-  expiresAt DateTime
+  channel    String
+  codeHash   String
+  expiresAt  DateTime
   consumedAt DateTime?
-  attempts Int @default(0)
-  createdAt DateTime @default(now())
-  user User? @relation(fields:[userId],references:[id],onDelete:SetNull)
-  @@index([identifier,createdAt])
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now())
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([identifier, createdAt])
   @@index([expiresAt])
   @@map("otp_challenges")
 }
 
 model Game {
-  id String @id @default(uuid())
-  provider String
-  providerGameId String
-  name String
-  category GameCategory
-  thumbnail String?
-  status GameStatus @default(ACTIVE)
-  metadata Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sessions GameSession[]
-  @@unique([provider,providerGameId])
-  @@index([provider,status])
-  @@index([category,status])
+  id              String        @id @default(uuid())
+  provider        String
+  providerGameId  String
+  name            String
+  category        GameCategory
+  thumbnail       String?
+  status          GameStatus    @default(ACTIVE)
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  sessions        GameSession[]
+
+  @@unique([provider, providerGameId])
+  @@index([provider, status])
+  @@index([category, status])
   @@map("games")
 }
 
 model GameSession {
-  id String @id @default(uuid())
-  userId String
-  gameId String
-  provider String
-  providerSessionId String?
-  status GameSessionStatus @default(ACTIVE)
-  launchUrl String?
-  metadata Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  expiresAt DateTime?
-  user User @relation(fields:[userId],references:[id],onDelete:Restrict)
-  game Game @relation(fields:[gameId],references:[id],onDelete:Restrict)
-  @@index([userId,status,createdAt])
-  @@index([gameId,status])
-  @@index([provider,providerSessionId])
+  id                  String             @id @default(uuid())
+  userId              String
+  gameId              String
+  provider             String
+  providerSessionId   String?
+  status              GameSessionStatus  @default(ACTIVE)
+  launchUrl           String?
+  metadata            Json?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  expiresAt           DateTime?
+  user                User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  game                Game                @relation(fields: [gameId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, createdAt])
+  @@index([gameId, status])
+  @@index([provider, providerSessionId])
   @@map("game_sessions")
 }
