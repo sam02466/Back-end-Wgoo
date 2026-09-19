@@ -1,0 +1,3 @@
+import {Prisma,UserStatus} from "@prisma/client"; import {prisma} from "../../database/prisma.js"; import {AppError} from "../../utils/errors.js";
+export async function getUserById(id:string){const u=await prisma.user.findUnique({where:{id}});if(!u)throw new AppError("USER_NOT_FOUND","User not found",404);return u;}
+export async function getOrCreateUser(identifier:string){const n=identifier.trim().toLowerCase(),email=n.includes("@");const e=email?await prisma.user.findUnique({where:{email:n}}):await prisma.user.findUnique({where:{phone:n}});if(e)return e;const data:Prisma.UserCreateInput=email?{email:n,status:UserStatus.PENDING}:{phone:n,status:UserStatus.PENDING};return prisma.user.create({data});}

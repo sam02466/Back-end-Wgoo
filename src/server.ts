@@ -1,0 +1,2 @@
+import {buildApp} from "./app.js"; import {env} from "./config/env.js"; import {prisma} from "./database/prisma.js"; const app=buildApp();
+async function start(){try{await prisma.$connect();await app.listen({port:env.PORT,host:"0.0.0.0"})}catch(e){app.log.error(e);await prisma.$disconnect();process.exit(1)}} async function shutdown(){await app.close();await prisma.$disconnect();process.exit(0)} process.on("SIGINT",shutdown);process.on("SIGTERM",shutdown);start();

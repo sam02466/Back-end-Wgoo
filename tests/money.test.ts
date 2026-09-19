@@ -1,0 +1,1 @@
+import {describe,expect,it} from "vitest"; import {Prisma} from "@prisma/client"; describe("money",()=>{it("uses decimal arithmetic",()=>{expect(new Prisma.Decimal("0.10").add(new Prisma.Decimal("0.20")).toString()).toBe("0.30")})});
