@@ -1,5 +1,187 @@
-import {Prisma,WalletStatus} from "@prisma/client"; import {prisma} from "../../database/prisma.js"; import {AppError,assertApp} from "../../utils/errors.js";
-export async function ensureWallet(userId:string,currency="INR"){return prisma.wallet.upsert({where:{userId_currency:{userId,currency}},create:{userId,currency,balance:0},update:{}});}
-export async function getWallet(userId:string,currency="INR"){const w=await prisma.wallet.findUnique({where:{userId_currency:{userId,currency}}});return w??ensureWallet(userId,currency);}
-type Args={userId:string;currency?:string;amount:Prisma.Decimal;reference?:string;metadata?:Prisma.InputJsonValue;type:"DEPOSIT"|"BET"|"WIN"|"ROLLBACK"|"WITHDRAWAL"|"ADJUSTMENT"|"REFUND";provider?:string;providerTransactionId?:string;providerRoundId?:string;originalProviderTransactionId?:string;providerType?:"BALANCE"|"DEBIT"|"CREDIT"|"ROLLBACK"};
-export async function mutateWallet(a:Args){if(!a.amount.isFinite()||a.amount.lte(0))throw new AppError("INVALID_AMOUNT","Amount must be greater than zero");return prisma.$transaction(async tx=>{let w=await tx.wallet.findUnique({where:{userId_currency:{userId:a.userId,currency:a.currency??"INR"}}});if(!w)w=await tx.wallet.create({data:{userId:a.userId,currency:a.currency??"INR",balance:0}});const rows=await tx.$queryRaw<Array<{id:string;user_id:string;currency:string;balance:Prisma.Decimal;status:WalletStatus}>>`SELECT id,user_id,currency,balance,status FROM wallets WHERE id=${w.id} FOR UPDATE`;const cur=rows[0];if(!cur)throw new AppError("WALLET_NOT_FOUND","Wallet not found",404);assertApp(cur.status===WalletStatus.ACTIVE,"WALLET_NOT_ACTIVE","Wallet is not active",409);const before=new Prisma.Decimal(cur.balance);const signed=["BET","WITHDRAWAL"].includes(a.type)?a.amount.neg():a.amount;const after=before.add(signed);if(after.lt(0))throw new AppError("INSUFFICIENT_FUNDS","Insufficient wallet balance",409);const ft=await tx.financialTransaction.create({data:{userId:a.userId,walletId:w.id,type:a.type,amount:a.amount,currency:cur.currency,status:"SUCCESS",reference:a.reference,metadata:a.metadata,processedAt:new Date()}});await tx.wallet.update({where:{id:w.id},data:{balance:after}});const ledger=await tx.ledgerEntry.create({data:{walletId:w.id,transactionId:ft.id,type:a.type,amount:signed,balanceBefore:before,balanceAfter:after,currency:cur.currency,reference:a.reference,metadata:a.metadata}});if(a.provider&&a.providerTransactionId&&a.providerType)await tx.providerTransaction.create({data:{provider:a.provider,providerTransactionId:a.providerTransactionId,providerRoundId:a.providerRoundId,originalProviderTransactionId:a.originalProviderTransactionId,userId:a.userId,walletId:w.id,financialTransactionId:ft.id,type:a.providerType,amount:a.amount,currency:cur.currency,status:"SUCCESS",processedAt:new Date()}});return {wallet:{id:w.id,userId:a.userId,currency:cur.currency,balance:after},transaction:ft,ledger};},{isolationLevel:Prisma.TransactionIsolationLevel.Serializable});}
+import { Prisma, WalletStatus } from "@prisma/client";
+import { prisma } from "../../database/prisma.js";
+import { AppError, assertApp } from "../../utils/errors.js";
+
+export async function ensureWallet(userId: string, currency = "INR") {
+  return prisma.wallet.upsert({
+    where: { userId_currency: { userId, currency } },
+    create: { userId, currency, balance: 0 },
+    update: {},
+  });
+}
+
+export async function getWallet(userId: string, currency = "INR") {
+  const w = await prisma.wallet.findUnique({
+    where: { userId_currency: { userId, currency } },
+  });
+
+  return w ?? ensureWallet(userId, currency);
+}
+
+type Args = {
+  userId: string;
+  currency?: string;
+  amount: Prisma.Decimal;
+  reference?: string;
+  metadata?: Prisma.InputJsonValue;
+  type:
+    | "DEPOSIT"
+    | "BET"
+    | "WIN"
+    | "ROLLBACK"
+    | "WITHDRAWAL"
+    | "ADJUSTMENT"
+    | "REFUND";
+  provider?: string;
+  providerTransactionId?: string;
+  providerRoundId?: string;
+  originalProviderTransactionId?: string;
+  providerType?: "BALANCE" | "DEBIT" | "CREDIT" | "ROLLBACK";
+};
+
+export async function mutateWallet(a: Args) {
+  if (!a.amount.isFinite() || a.amount.lte(0)) {
+    throw new AppError(
+      "INVALID_AMOUNT",
+      "Amount must be greater than zero"
+    );
+  }
+
+  return prisma.$transaction(
+    async (tx) => {
+      let w = await tx.wallet.findUnique({
+        where: {
+          userId_currency: {
+            userId: a.userId,
+            currency: a.currency ?? "INR",
+          },
+        },
+      });
+
+      if (!w) {
+        w = await tx.wallet.create({
+          data: {
+            userId: a.userId,
+            currency: a.currency ?? "INR",
+            balance: 0,
+          },
+        });
+      }
+
+      const rows = await tx.$queryRaw<
+        Array<{
+          id: string;
+          userId: string;
+          currency: string;
+          balance: Prisma.Decimal;
+          status: WalletStatus;
+        }>
+      >`
+        SELECT id, "userId", currency, balance, status
+        FROM wallets
+        WHERE id = ${w.id}
+        FOR UPDATE
+      `;
+
+      const cur = rows[0];
+
+      if (!cur) {
+        throw new AppError("WALLET_NOT_FOUND", "Wallet not found", 404);
+      }
+
+      assertApp(
+        cur.status === WalletStatus.ACTIVE,
+        "WALLET_NOT_ACTIVE",
+        "Wallet is not active",
+        409
+      );
+
+      const before = new Prisma.Decimal(cur.balance);
+
+      const signed = ["BET", "WITHDRAWAL"].includes(a.type)
+        ? a.amount.neg()
+        : a.amount;
+
+      const after = before.add(signed);
+
+      if (after.lt(0)) {
+        throw new AppError(
+          "INSUFFICIENT_FUNDS",
+          "Insufficient wallet balance",
+          409
+        );
+      }
+
+      const ft = await tx.financialTransaction.create({
+        data: {
+          userId: a.userId,
+          walletId: w.id,
+          type: a.type,
+          amount: a.amount,
+          currency: cur.currency,
+          status: "SUCCESS",
+          reference: a.reference,
+          metadata: a.metadata,
+          processedAt: new Date(),
+        },
+      });
+
+      await tx.wallet.update({
+        where: { id: w.id },
+        data: { balance: after },
+      });
+
+      const ledger = await tx.ledgerEntry.create({
+        data: {
+          walletId: w.id,
+          transactionId: ft.id,
+          type: a.type,
+          amount: signed,
+          balanceBefore: before,
+          balanceAfter: after,
+          currency: cur.currency,
+          reference: a.reference,
+          metadata: a.metadata,
+        },
+      });
+
+      if (
+        a.provider &&
+        a.providerTransactionId &&
+        a.providerType
+      ) {
+        await tx.providerTransaction.create({
+          data: {
+            provider: a.provider,
+            providerTransactionId: a.providerTransactionId,
+            providerRoundId: a.providerRoundId,
+            originalProviderTransactionId:
+              a.originalProviderTransactionId,
+            userId: a.userId,
+            walletId: w.id,
+            financialTransactionId: ft.id,
+            type: a.providerType,
+            amount: a.amount,
+            currency: cur.currency,
+            status: "SUCCESS",
+            processedAt: new Date(),
+          },
+        });
+      }
+
+      return {
+        wallet: {
+          id: w.id,
+          userId: a.userId,
+          currency: cur.currency,
+          balance: after,
+        },
+        transaction: ft,
+        ledger,
+      };
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    }
+  );
+}
