@@ -1,0 +1,32 @@
+image: node:22
+
+services:
+  - name: postgres:16
+    alias: postgres
+
+variables:
+  POSTGRES_DB: gaming_test
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: postgres
+  DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/gaming_test"
+  JWT_SECRET: "ci-test-secret-must-be-at-least-32-characters-long"
+  JWT_EXPIRES_IN: "7d"
+  NODE_ENV: "test"
+  RUN_DB_TESTS: "1"
+  DEV_OTP_ENABLED: "false"
+  CORS_ORIGINS: "*"
+  SOFTAGGREGATOR_ENABLED: "false"
+
+before_script:
+  - node --version
+  - npm --version
+  - npm install
+  - npx prisma generate
+  - npx prisma migrate deploy
+
+rollback_db_test:
+  stage: test
+  script:
+    - npx vitest run tests/provider-rollback-db.test.ts
+  after_script:
+    - npx prisma migrate status || true
