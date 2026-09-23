@@ -9,7 +9,7 @@ const describeDb = enabled ? describe : describe.skip;
 const prisma = enabled ? new PrismaClient() : null;
 
 describeDb("provider rollback database integration", () => {
-const marker = rollback-${Date.now()}-${Math.random().toString(16).slice(2)};
+  const marker = `rollback-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 let userId: string;
 let walletId: string;
